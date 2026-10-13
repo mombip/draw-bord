@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Draw Board · Privacy</title>
+  <link rel="icon" href="/logo.svg" type="image/svg+xml">
+  <style>
+    :root { --bg: #fafafa; --fg: #1e1e1e; --muted: #666; --link: #1971c2; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #1b1b1d; --fg: #e8e8e8; --muted: #a0a0a0; --link: #74c0fc; } }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 system-ui, sans-serif; }
+    main { max-width: 680px; margin: 0 auto; padding: 32px 16px 64px; }
+    header { display: flex; align-items: center; gap: 12px; }
+    h1 { font-size: 28px; margin: 0; }
+    h2 { font-size: 18px; margin-top: 32px; }
+    a { color: var(--link); }
+    .muted { color: var(--muted); }
+  </style>
+</head>
+<body>
+<main>
+  <header><img src="/logo.svg" width="44" height="44" alt=""><h1>Draw Board: privacy</h1></header>
+  <p class="muted">Last updated 13 October 2026</p>
+
+  <p>Draw Board is a whiteboard that runs in your browser at
+  <a href="https://drawboardweb.netlify.app">drawboardweb.netlify.app</a>. It has no accounts, no ads,
+  no analytics and no server of its own that stores your drawings.</p>
+
+  <h2>Your board</h2>
+  <p>The board is saved in your browser's local storage, on your device. Files you save or open with
+  <em>Save</em> / <em>Open</em> stay on your computer. Nothing is sent to us.</p>
+
+  <h2>Google Drive (optional)</h2>
+  <p>If you click the Google Drive button, Google asks you to let Draw Board use the
+  <code>drive.file</code> permission. With it, Draw Board can see and change <strong>only the files it
+  created itself</strong>: the folder <code>draw_board_files</code> in your Drive, the synced board
+  <code>board.svg</code> in it, and the drawings you save there. It cannot see or change any other
+  file in your Drive.</p>
+  <ul>
+    <li>Your drawings travel directly between your browser and Google. They never pass through a server
+    of ours.</li>
+    <li>The access Google grants is a short-lived token kept only in the open page's memory. It is
+    discarded when you close the tab or choose <em>Disconnect</em>.</li>
+    <li>We do not collect, share or sell any data from your Google account, and do not use it for
+    advertising or to train AI models.</li>
+  </ul>
+  <p>Draw Board's use and transfer of information received from Google APIs adheres to the
+  <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User
+  Data Policy</a>, including the Limited Use requirements.</p>
+
+  <h2>Hosting</h2>
+  <p>The site's files are served by <a href="https://www.netlify.com/privacy/">Netlify</a>, which, like
+  any web host, may log technical request data such as IP addresses.</p>
+
+  <h2>Removing access and data</h2>
+  <p>Choose <em>Disconnect</em> in the Drive dialog, and remove Draw Board under
+  <a href="https://myaccount.google.com/connections">Google Account → Third-party connections</a>.
+  Delete the <code>draw_board_files</code> folder in Drive to remove the files. Clearing the site's data
+  in your browser removes the local board.</p>
+
+  <h2>Contact</h2>
+  <p>Questions: <a href="https://github.com/mombip/draw-bord/issues">open an issue on GitHub</a>.</p>
+</main>
+</body>
+</html>

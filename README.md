@@ -1,4 +1,4 @@
-# Draw Board
+# <img src="public/logo.svg" width="36" align="top" alt=""> Draw Board
 
 A whiteboard where your hand never leaves the drawing to visit a toolbar.
 
@@ -32,7 +32,7 @@ Click the Google Drive button in the toolbar to connect. The board then syncs to
 `draw_board_files/board.svg` in your Drive: it is pulled again when you come back to the tab, the
 newer copy wins, and Ctrl+Z brings back the one it replaced. Click the button again for your
 drawings in that folder: open one, or *Save board as…* a new one; Ctrl+S then saves back to it.
-The app can only see files it created (`drive.file`).
+The app can only see files it created (`drive.file`). [Privacy](https://drawboardweb.netlify.app/privacy.html).
 
 Lightweight by design: there is no backend, the page gets short-lived tokens straight from Google.
 So each new tab needs one click on the Drive button, and when the hourly token runs out your next
