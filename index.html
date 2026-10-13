@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Draw Board</title>
+  <link rel="icon" href="data:,">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; connect-src 'self' ws:">
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #fafafa; font: 13px system-ui, sans-serif; }
+    #board { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+    #toolbar { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; align-items: center;
+      padding: 6px; background: #fff; border-radius: 10px; box-shadow: 0 2px 10px #0002; user-select: none; }
+    #toolbar button { width: 34px; height: 34px; border: 0; border-radius: 7px; background: none; cursor: pointer; font-size: 17px;
+      display: grid; place-items: center; }
+    #toolbar button:hover { background: #f0f0f0; }
+    #toolbar button.on { background: #e5ebff; }
+    #toolbar button .dot { border-radius: 50%; }
+    #toolbar input[type=color] { width: 30px; height: 30px; border: 0; padding: 0; background: none; cursor: pointer; }
+    #toolbar input[type=range] { width: 80px; }
+    .sep { width: 1px; align-self: stretch; background: #ddd; margin: 0 4px; }
+    #hint { position: fixed; left: 10px; bottom: 8px; color: #888; pointer-events: none; }
+    #status { position: fixed; right: 10px; bottom: 8px; color: #c33; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <canvas id="board"></canvas>
+  <div id="toolbar">
+    <button data-tool="select" title="Select (V)">⬚</button>
+    <button data-tool="pen" title="Pen (P)">✎</button>
+    <button data-tool="eraser" title="Eraser (E) — or drag with right mouse button">⌫</button>
+    <span class="sep"></span>
+    <span id="presets" style="display:flex;gap:2px"></span>
+    <input id="color" type="color" title="Pen color">
+    <input id="width" type="range" min="1" max="40" title="Pen thickness">
+    <span class="sep"></span>
+    <button id="open" title="Open file (Ctrl+O)">📂</button>
+    <button id="save" title="Save to file (Ctrl+S) · Shift+click / Ctrl+Shift+S: Save as">💾</button>
+    <span class="sep"></span>
+    <button id="undo" title="Undo (Ctrl+Z)">↶</button>
+    <button id="redo" title="Redo (Ctrl+Shift+Z)">↷</button>
+  </div>
+  <div id="hint">Right-drag: erase · Wheel: zoom · Middle / Space-drag / Shift+wheel: pan · Ctrl+C / Ctrl+V: copy / paste at cursor · Del: delete</div>
+  <div id="status"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+{
+  "name": "draw-board",
+  "version": "0.1.0",
+  "description": "Infinite whiteboard (browser + Electron)",
+  "private": true,
+  "type": "module",
+  "main": "dist-node/electron/main.js",
+  "scripts": {
+    "dev": "tsc -p tsconfig.node.json && (node dist-node/server/main.js & vite)",
+    "build": "tsc --noEmit && vite build && tsc -p tsconfig.node.json",
+    "start": "node dist-node/server/main.js",
+    "electron": "npm run build && electron .",
+    "dist:electron": "npm run build && electron-builder",
+    "deploy": "vite build && netlify deploy --prod --dir dist --no-build",
+    "test": "node --experimental-strip-types --no-warnings --test src/*.test.ts"
+  },
+  "build": {
+    "appId": "pl.pixel.drawboard",
+    "productName": "Draw Board",
+    "files": [
+      "dist/**",
+      "dist-node/**",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Graphics",
+      "syncDesktopName": true
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4"
+  },
+  "desktopName": "draw-board.desktop"
+}
