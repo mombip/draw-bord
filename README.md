@@ -2,9 +2,9 @@
 
 A whiteboard where your hand never leaves the drawing to visit a toolbar.
 
-[![Draw, Shift-snap a straight line, right-drag to erase, zoom and pan](docs/preview.gif)](https://draw-board-mp.netlify.app)
+[![Draw, Shift-snap a straight line, right-drag to erase, zoom and pan](docs/preview.gif)](https://drawboardweb.netlify.app)
 
-**[▶ Try it in your browser](https://draw-board-mp.netlify.app)** (no install; the board is kept in your browser's local storage)
+**[▶ Try it in your browser](https://drawboardweb.netlify.app)** (no install; the board is kept in your browser's local storage)
 
 Most drawing apps make you switch tools for every small thing: pick the eraser, erase,
 pick the pen again; grab the hand tool to move around; come back. Draw Board puts the
@@ -41,7 +41,7 @@ click on the board renews it (a popup flashes for a second; no password). Not in
 Setup, once: in the [Google Cloud console](https://console.cloud.google.com/) create a project, enable
 the **Google Drive API**, configure the **OAuth consent screen** (External; add yourself as a test
 user), then **Credentials → Create OAuth client ID** of type *Web application* with authorized
-JavaScript origins `https://draw-board-mp.netlify.app`, `http://localhost:5173`,
+JavaScript origins `https://drawboardweb.netlify.app`, `http://localhost:5173`,
 `http://localhost:3000` and `http://localhost:4173`. Put the client ID in `.env` as
 `VITE_GOOGLE_CLIENT_ID` and rebuild.
 
