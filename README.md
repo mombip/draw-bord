@@ -2,6 +2,10 @@
 
 A whiteboard where your hand never leaves the drawing to visit a toolbar.
 
+[![Draw, Shift-snap a straight line, right-drag to erase, zoom and pan](docs/preview.gif)](https://draw-board-mp.netlify.app)
+
+**[▶ Try it in your browser](https://draw-board-mp.netlify.app)** (no install; the board is kept in your browser's local storage)
+
 Most drawing apps make you switch tools for every small thing: pick the eraser, erase,
 pick the pen again; grab the hand tool to move around; come back. Draw Board puts the
 everyday actions on the mouse itself, so you can **draw, navigate and erase without
