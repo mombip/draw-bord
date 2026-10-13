@@ -506,7 +506,7 @@ function driveUi() {
   driveBtn.title = drive.connected() ? 'Google Drive: synced · click for files' : 'Connect Google Drive';
 }
 function driveFailed(e: unknown) {
-  status.textContent = (e as drive.DriveError).status === 401 ? 'Drive: click ☁ to reconnect' : `Drive: ${(e as Error).message}`;
+  status.textContent = (e as drive.DriveError).status === 401 ? 'Drive: click the Drive button to reconnect' : `Drive: ${(e as Error).message}`;
   driveUi();
 }
 
