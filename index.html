@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Draw Board</title>
   <link rel="icon" href="data:,">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; connect-src 'self' ws:">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; frame-src https://accounts.google.com/gsi/; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; connect-src 'self' ws: https://accounts.google.com/gsi/ https://www.googleapis.com">
   <style>
     html, body { margin: 0; height: 100%; overflow: hidden; background: #fafafa; font: 13px system-ui, sans-serif; }
     #board { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
@@ -21,6 +21,14 @@
     .sep { width: 1px; align-self: stretch; background: #ddd; margin: 0 4px; }
     #hint { position: fixed; left: 10px; bottom: 8px; color: #888; pointer-events: none; }
     #status { position: fixed; right: 10px; bottom: 8px; color: #c33; pointer-events: none; }
+    [hidden] { display: none !important; }
+    #drive-dlg { border: 0; border-radius: 10px; box-shadow: 0 4px 24px #0003; padding: 14px; min-width: 320px; font: inherit; }
+    #drive-files { list-style: none; margin: 10px 0; padding: 0; max-height: 50vh; overflow: auto; }
+    #drive-files button { width: 100%; display: flex; justify-content: space-between; gap: 16px; border: 0; background: none;
+      padding: 6px 8px; border-radius: 6px; cursor: pointer; font: inherit; text-align: left; }
+    #drive-files button:hover { background: #f0f0f0; }
+    #drive-files small { color: #888; }
+    .dlg-row { display: flex; gap: 6px; justify-content: flex-end; }
   </style>
 </head>
 <body>
@@ -36,12 +44,22 @@
     <span class="sep"></span>
     <button id="open" title="Open file (Ctrl+O)">📂</button>
     <button id="save" title="Save to file (Ctrl+S) · Shift+click / Ctrl+Shift+S: Save as">💾</button>
+    <button id="drive" title="Connect Google Drive" hidden>☁</button>
     <span class="sep"></span>
     <button id="undo" title="Undo (Ctrl+Z)">↶</button>
     <button id="redo" title="Redo (Ctrl+Shift+Z)">↷</button>
   </div>
   <div id="hint">Shift+draw: snap to grid · Right-drag: erase · Wheel: zoom · Middle / Space-drag / Shift+wheel: pan · Ctrl+C / Ctrl+V: copy / paste at cursor · Del: delete</div>
   <div id="status"></div>
+  <dialog id="drive-dlg">
+    <b>Google Drive · draw_board_files</b>
+    <ul id="drive-files"></ul>
+    <form method="dialog" class="dlg-row">
+      <button type="button" id="drive-save">Save board as…</button>
+      <button type="button" id="drive-off">Disconnect</button>
+      <button>Close</button>
+    </form>
+  </dialog>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

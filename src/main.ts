@@ -1,4 +1,5 @@
 import { svgToObjects } from './svg-import.ts';
+import * as drive from './drive.ts';
 import { bbox, hit, hitSweep, hitsRect, inBox, isObj, parseBoard, smooth, toSvg, transform, uid, unionBox, type Box, type Obj, type Pt, type Stroke } from './geom.ts';
 
 const PRESETS = [
@@ -73,6 +74,11 @@ let loaded = false, local = false, saveTimer = 0, saving = Promise.resolve();
 function save() { // every board change lands here
   fileDirty = true; showFile();
   if (!loaded) return;
+  if (!pulling) { // a change made here, not one pulled from Drive (pushing that back would ping-pong)
+    unpushed = true;
+    try { localStorage.setItem(CHANGED_KEY, String(Date.now())); } catch { /* storage off: first sync prefers Drive */ }
+    if (drive.connected()) schedulePush();
+  }
   clearTimeout(saveTimer);
   // chained so PUTs reach the server in order: an older snapshot never overwrites a newer one
   saveTimer = window.setTimeout(() => saving = saving.then(async () => {
@@ -427,9 +433,10 @@ function flash(msg: string) {
 }
 
 async function saveFile(as: boolean) {
-  const text = toSvg(objects);
+  const text = toSvg(objects), toDrive = !!driveFile && !as;
   try {
-    if (desktop) {
+    if (toDrive) driveFile = await drive.update(driveFile!.id, text);
+    else if (desktop) {
       const r = await desktop.saveFile(text, fileName ?? 'board.svg', as ? undefined : filePath);
       if (!r) return; // cancelled
       filePath = r.path; fileName = r.name;
@@ -446,6 +453,7 @@ async function saveFile(as: boolean) {
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
     }
+    if (!toDrive) driveFile = null; // saved locally: Ctrl+S now goes to the local file
     fileDirty = false; showFile();
     flash(`Saved ${fileName}`);
   } catch (e) {
@@ -477,18 +485,120 @@ async function openFile() {
     const { objects: objs, skipped } = src.text.trimStart().startsWith('<') ? svgToObjects(src.text) : { objects: parseBoard(src.text), skipped: 0 };
     edit(() => { objects = objs; selected.clear(); }); // undoable
     fileHandle = src.handle ?? null; filePath = src.path; fileName = src.name; fileDirty = false; showFile();
+    driveFile = null;
     status.textContent = skipped ? `Opened; skipped ${skipped} item(s) the board can't show (text, clones, linked images)` : '';
   } catch (e) {
     if ((e as Error).name !== 'AbortError') status.textContent = `Could not open file: ${(e as Error).message}`;
   }
 }
 
+// ---------- Google Drive (web only; see drive.ts) ----------
+// localStorage / the backend stays the working copy; Drive mirrors it in draw_board_files/board.svg.
+const driveBtn = $<HTMLButtonElement>('drive'), driveDlg = $<HTMLDialogElement>('drive-dlg'), driveList = $('drive-files');
+const CHANGED_KEY = 'drawboard-changed'; // when this browser last changed the board: decides the first sync
+let driveFile: drive.DriveFile | null = null; // Ctrl+S target after Save/Open on Drive
+let seenVersion = '', unpushed = false, pulling = false, pushTimer = 0, lastPush = 0;
+
+const localChanged = () => { try { return Number(localStorage.getItem(CHANGED_KEY)) || 0; } catch { return 0; } };
+
+function driveUi() {
+  driveBtn.classList.toggle('on', drive.connected());
+  driveBtn.title = drive.connected() ? 'Google Drive: synced · click for files' : 'Connect Google Drive';
+}
+function driveFailed(e: unknown) {
+  status.textContent = (e as drive.DriveError).status === 401 ? 'Drive: click ☁ to reconnect' : `Drive: ${(e as Error).message}`;
+  driveUi();
+}
+
+/** From save(): upload the board, at most every 2 s, in order with the other saves. */
+function schedulePush() {
+  clearTimeout(pushTimer);
+  pushTimer = window.setTimeout(() => saving = saving.then(push), Math.max(400, lastPush + 2000 - Date.now()));
+}
+async function push() {
+  if (!drive.connected() || !unpushed) return;
+  lastPush = Date.now(); unpushed = false;
+  try { seenVersion = (await drive.putSync(toSvg(objects))).version; }
+  catch (e) { unpushed = true; driveFailed(e); }
+}
+/** On connect and focus: bring the board in line with Drive (drive.syncAction decides). */
+async function pull() {
+  if (!drive.connected()) return;
+  try {
+    const remote = await drive.getSync();
+    const act = drive.syncAction(remote, seenVersion, unpushed, localChanged());
+    if (act === 'push') { unpushed = true; return push(); }
+    if (act !== 'pull') return;
+    const { objects: objs } = svgToObjects(await drive.download(remote!.id));
+    seenVersion = remote!.version; unpushed = false;
+    pulling = true;
+    edit(() => { objects = objs; selected.clear(); }); // Ctrl+Z brings back what this replaced
+    pulling = false;
+  } catch (e) { driveFailed(e); }
+}
+function connectDrive() {
+  drive.signIn().then(() => {
+    if (status.textContent?.startsWith('Drive')) status.textContent = '';
+    driveUi();
+    saving = saving.then(pull);
+  }, driveFailed);
+}
+
+async function showDrive() {
+  const item = (text: string) => Object.assign(document.createElement('li'), { textContent: text });
+  driveList.replaceChildren(item('Loading…'));
+  driveDlg.showModal();
+  try {
+    const files = await drive.list();
+    files.sort((a, b) => +(b.name === drive.SYNC) - +(a.name === drive.SYNC)); // synced board on top; stable, so the rest stay newest first
+    driveList.replaceChildren(...files.map(f => {
+      const b = document.createElement('button');
+      b.textContent = f.name === drive.SYNC ? 'Synced board' : f.name.replace(/\.svg$/, '');
+      b.append(Object.assign(document.createElement('small'), { textContent: new Date(f.modifiedTime).toLocaleString() }));
+      b.onclick = () => { driveDlg.close(); openDrive(f); };
+      const li = item(''); li.append(b); return li;
+    }));
+    if (!files.length) driveList.replaceChildren(item('No drawings yet: “Save board as…” adds one'));
+  } catch (e) { driveDlg.close(); driveFailed(e); }
+}
+async function openDrive(f: drive.DriveFile) {
+  try {
+    const { objects: objs, skipped } = svgToObjects(await drive.download(f.id)); // throws before we touch the board
+    edit(() => { objects = objs; selected.clear(); }); // undoable
+    driveFile = f; fileHandle = null; filePath = undefined; fileName = f.name; fileDirty = false; showFile();
+    status.textContent = skipped ? `Opened; skipped ${skipped} item(s) the board can't show` : '';
+  } catch (e) { driveFailed(e); }
+}
+async function saveToDrive() {
+  driveDlg.close();
+  let name = prompt(`Save to Google Drive (${drive.FOLDER}) as:`, fileName?.replace(/\.svg$/, '') ?? 'drawing')?.trim();
+  if (!name) return;
+  if (!name.endsWith('.svg')) name += '.svg';
+  if (name === drive.SYNC) { status.textContent = `${drive.SYNC} is the synced board; pick another name`; return; }
+  try {
+    driveFile = await drive.create(name, toSvg(objects));
+    fileHandle = null; filePath = undefined; fileName = name; fileDirty = false; showFile();
+    flash(`Saved ${name} to Drive`);
+  } catch (e) { driveFailed(e); }
+}
+
+driveBtn.onclick = () => drive.connected() ? showDrive() : connectDrive();
+$('drive-save').onclick = () => saveToDrive();
+$('drive-off').onclick = () => {
+  driveDlg.close(); drive.signOut();
+  driveFile = null; seenVersion = ''; driveUi(); flash('Disconnected from Drive');
+};
+// renew on pointerup, not pointerdown: a popup mid-stroke could swallow the pointerup
+canvas.addEventListener('pointerup', () => { if (drive.needsRenewal()) connectDrive(); });
+addEventListener('focus', () => { if (drive.connected()) saving = saving.then(pull); });
+if (drive.clientId && !desktop) drive.load().then(() => { driveBtn.hidden = false; driveUi(); }, () => {});
+
 // ---------- keyboard + toolbar ----------
 function setTool(t: Tool) { tool = t; ui(); render(); }
 function setPen(p: { color: string; width: number }) { Object.assign(pen, p); setTool('pen'); }
 
 addEventListener('keydown', e => {
-  if (e.target instanceof HTMLInputElement) return;
+  if (e.target instanceof HTMLInputElement || driveDlg.open) return;
   const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
   if (k === 'shift' && tool === 'pen' && !drag) snapHint = toGrid(mouse);
   if (k === ' ') { spaceDown = true; e.preventDefault(); }
