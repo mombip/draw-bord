@@ -376,21 +376,38 @@ document.addEventListener('paste', e => {
 });
 
 // ---------- local files ----------
-// File System Access API (Chromium, Electron): real Save/Open dialogs and Ctrl+S back to the same file.
+// Electron: native dialogs through the preload bridge (window.desktop).
+// Chromium: File System Access API — real dialogs, Ctrl+S back to the same file.
 // Elsewhere: download a copy / <input type=file>.
+type Desktop = {
+  saveFile(text: string, suggestedName: string, path?: string): Promise<{ path: string; name: string } | null>;
+  openFile(): Promise<{ path: string; name: string; text: string } | null>;
+};
+const desktop = (window as any).desktop as Desktop | undefined;
 const fsApi = window as any; // pickers aren't in TS's DOM lib yet
 const SAVE_TYPES = [{ description: 'SVG image (reopens in Draw Board)', accept: { 'image/svg+xml': ['.svg'] } }];
 const OPEN_TYPES = [{ description: 'Draw Board', accept: { 'image/svg+xml': ['.svg'], 'application/json': ['.drawboard'] } }];
-let fileHandle: any = null, fileName: string | null = null, fileDirty = false;
+let fileHandle: any = null, filePath: string | undefined, fileName: string | null = null, fileDirty = false;
 
 function showFile() {
   document.title = fileName ? `${fileDirty ? '• ' : ''}${fileName} — Draw Board` : 'Draw Board';
 }
 
+/** Short green notice in the status corner. */
+function flash(msg: string) {
+  status.textContent = msg;
+  status.style.color = '#2b8a3e';
+  setTimeout(() => { if (status.textContent === msg) status.textContent = ''; status.style.color = ''; }, 2000);
+}
+
 async function saveFile(as: boolean) {
   const text = toSvg(objects);
   try {
-    if (fsApi.showSaveFilePicker) {
+    if (desktop) {
+      const r = await desktop.saveFile(text, fileName ?? 'board.svg', as ? undefined : filePath);
+      if (!r) return; // cancelled
+      filePath = r.path; fileName = r.name;
+    } else if (fsApi.showSaveFilePicker) {
       if (as || !fileHandle) fileHandle = await fsApi.showSaveFilePicker({ suggestedName: fileName ?? 'board.svg', types: SAVE_TYPES });
       const out = await fileHandle.createWritable();
       await out.write(text);
@@ -404,7 +421,7 @@ async function saveFile(as: boolean) {
       setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
     }
     fileDirty = false; showFile();
-    status.textContent = '';
+    flash(`Saved ${fileName}`);
   } catch (e) {
     if ((e as Error).name !== 'AbortError') status.textContent = `Could not save file: ${(e as Error).message}`;
   }
@@ -419,14 +436,21 @@ const pickFile = () => new Promise<File>((ok, fail) => {
 
 async function openFile() {
   try {
-    let handle: any = null, file: File;
-    if (fsApi.showOpenFilePicker) { [handle] = await fsApi.showOpenFilePicker({ types: OPEN_TYPES }); file = await handle.getFile(); }
-    else file = await pickFile();
-    // parse throws before we adopt the handle: Ctrl+S never overwrites a bad pick
-    const text = await file.text();
-    const { objects: objs, skipped } = text.trimStart().startsWith('<') ? svgToObjects(text) : { objects: parseBoard(text), skipped: 0 };
+    let src: { text: string; name: string; handle?: any; path?: string } | null;
+    if (desktop) src = await desktop.openFile();
+    else if (fsApi.showOpenFilePicker) {
+      const [handle] = await fsApi.showOpenFilePicker({ types: OPEN_TYPES });
+      const file: File = await handle.getFile();
+      src = { text: await file.text(), name: file.name, handle };
+    } else {
+      const file = await pickFile();
+      src = { text: await file.text(), name: file.name };
+    }
+    if (!src) return; // cancelled
+    // parse throws before we adopt the file: Ctrl+S never overwrites a bad pick
+    const { objects: objs, skipped } = src.text.trimStart().startsWith('<') ? svgToObjects(src.text) : { objects: parseBoard(src.text), skipped: 0 };
     edit(() => { objects = objs; selected.clear(); }); // undoable
-    fileHandle = handle; fileName = file.name; fileDirty = false; showFile();
+    fileHandle = src.handle ?? null; filePath = src.path; fileName = src.name; fileDirty = false; showFile();
     status.textContent = skipped ? `Opened; skipped ${skipped} item(s) the board can't show (text, clones, linked images)` : '';
   } catch (e) {
     if ((e as Error).name !== 'AbortError') status.textContent = `Could not open file: ${(e as Error).message}`;
