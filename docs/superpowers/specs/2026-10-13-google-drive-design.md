@@ -6,6 +6,14 @@ Keep the board on Google Drive from the web version: it auto-syncs as you draw, 
 board shows up in any browser you connect from, and you can save/open separate drawings on
 Drive. One user, several devices. Web only; the Electron app keeps local files.
 
+## Strategy: lightweight, browser-only
+
+No backend: the page gets short-lived (~1 h) access tokens straight from Google and calls the
+Drive API itself. The price is one click on ☁ per tab, and a ~1 s popup flash when the token is
+renewed on your next click after expiry (no password, no consent once granted). Upgrade path
+if that gets annoying: a small Netlify function doing the OAuth code flow with a refresh token
+in an httpOnly cookie, which makes sync start and renew silently.
+
 ## Decisions
 
 | Topic | Decision |
@@ -24,7 +32,7 @@ Drive. One user, several devices. Web only; the Electron app keeps local files.
 (popup; needs the click as user activation). Browsers block the popup without a click, so each
 new tab needs one click on ☁; that is the accepted cost of having no backend.
 
-**Token expiry.** Tokens last ~1 h. When one is within 5 min of expiry, the next pointerdown
+**Token expiry.** Tokens last ~1 h. When one is within 5 min of expiry (or a call got 401), the next pointerup
 on the board requests a fresh one silently (`prompt: ''`). If a Drive call returns 401 anyway,
 Drive goes to "disconnected", the status says `Drive: click ☁ to reconnect`, and the board
 keeps saving to local storage; reconnecting pushes the current board.
@@ -39,23 +47,27 @@ not the one this tab last wrote or read, download it and replace the board via `
 On first connect only: if `board.svg` doesn't exist yet, upload the local board; if it
 exists, the newer of (Drive `modifiedTime`, local last-change time kept in localStorage) wins.
 
-**Save to Drive…** (☁ menu) asks for a name (`prompt`), creates `<name>.svg` in the folder,
-and remembers it as the current file: Ctrl+S then writes back to that Drive file, like the
-existing local file handle. Ctrl+Shift+S keeps meaning "Save as" (local). Opening or saving a
-local file clears the Drive file binding and vice versa.
+**Drive dialog.** Clicking ☁ while connected opens one native `<dialog>`: the file list
+(name, modified date) plus *Save board as…* and *Disconnect*. Keyboard shortcuts are ignored
+while it is open; Esc closes it.
 
-**Open from Drive…** shows a native `<dialog>` listing the files (name, modified date). Picking
-one downloads it, parses it with `svgToObjects` (a parse error leaves the board untouched), and
-replaces the board via `edit()`.
+**Open.** Picking a file downloads it, parses it with `svgToObjects` (a parse error leaves the
+board untouched), and replaces the board via `edit()`.
+
+**Save board as…** asks for a name (`prompt`), creates `<name>.svg` in the folder (the name
+`board.svg` is refused: it is the synced board), and remembers it as the current file: Ctrl+S
+then writes back to that Drive file, like the existing local file handle. Ctrl+Shift+S keeps
+meaning "Save as" (local). Opening or saving a local file clears the Drive file binding and
+vice versa.
 
 **Disconnect** revokes the token and goes back to local-only.
 
 ## Changes
 
 - `src/drive.ts` (new): token client, `ensureFolder`, `list`, `download`, `create`, `update`
-  (multipart upload), plus the pure helpers `newer(a, b)` and `multipart(meta, text)`.
-- `src/main.ts`: ☁ button + menu, hooks in `save()`, `saveFile()`, `openFile()`, `focus`, pointerdown.
-- `index.html`: ☁ button, `<dialog>` for the file list, CSP allowing
+  (multipart upload), plus the pure helpers `syncAction(...)` (push / pull / nothing) and `multipart(...)`.
+- `src/main.ts`: ☁ button + dialog, hooks in `save()`, `saveFile()`, `openFile()`, `focus`, pointerup.
+- `index.html`: ☁ button, the Drive `<dialog>`, CSP allowing
   `https://accounts.google.com/gsi/client` (script), `https://accounts.google.com` (frame, style),
   `https://www.googleapis.com` (connect).
 - `.env`: `VITE_GOOGLE_CLIENT_ID=...` (a client ID is public; committed).
@@ -66,7 +78,7 @@ replaces the board via `edit()`.
 
 ## Testing
 
-- `src/drive.test.ts` (node:test): `newer()` and `multipart()` body/boundary format.
+- `src/drive.test.ts` (node:test): `syncAction()` cases and the `multipart()` body format.
 - Manual, with a real account in the browser: connect → draw → `board.svg` updates in Drive;
   second tab edits → first tab refocused pulls it, Ctrl+Z restores; Save to Drive → Ctrl+S
   updates the same file; Open from Drive lists and opens; Disconnect; reconnect after a 401.
