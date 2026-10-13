@@ -56,11 +56,14 @@ export function signIn(): Promise<void> {
     client ??= oauth.initTokenClient({
       client_id: clientId, scope: SCOPE,
       callback: (r: any) => {
-        if (r.error) return pending?.fail(new Error(r.error_description ?? r.error));
+        if (r.error) { wanted = false; return pending?.fail(new Error(r.error_description ?? r.error)); }
         token = r.access_token; expires = Date.now() + Number(r.expires_in) * 1000; wanted = true;
         pending?.ok();
       },
-      error_callback: (e: any) => pending?.fail(new Error(e.type === 'popup_closed' ? 'sign-in cancelled' : e.message ?? e.type)),
+      error_callback: (e: any) => { // declined: stop renewing on every click, only the Drive button reconnects
+        wanted = false;
+        pending?.fail(new Error(e.type === 'popup_closed' ? 'sign-in cancelled' : e.message ?? e.type));
+      },
     });
     pending = { ok, fail };
     client.requestAccessToken({ prompt: '' }); // asks for consent only the first time
@@ -118,6 +121,8 @@ export async function create(name: string, text: string): Promise<DriveFile> {
   })).json();
 }
 
+// ponytail: simple/multipart uploads; Google documents 5 MB for these, so a board heavy with pasted
+// images may fail to sync (status shows the error, the board stays local). uploadType=resumable if it bites.
 export async function update(id: string, text: string): Promise<DriveFile> {
   return (await call(`${UPLOAD}/${id}?uploadType=media&fields=${FIELDS}`, { method: 'PATCH', type: 'image/svg+xml', body: text })).json();
 }
@@ -126,11 +131,16 @@ export async function update(id: string, text: string): Promise<DriveFile> {
 export async function getSync(): Promise<DriveFile | undefined> {
   const [f] = await find(`'${await folder()}' in parents and name = '${SYNC}'`);
   syncId = f?.id ?? ''; // forget a trashed one so putSync recreates it
+  if (!f) folderP = null; // the folder itself may be in the trash: look it up again
   return f;
 }
 
 export async function putSync(text: string): Promise<DriveFile> {
-  const f = syncId ? await update(syncId, text) : await create(SYNC, text);
+  if (syncId) try { return await update(syncId, text); } catch (e) {
+    if ((e as DriveError).status !== 404) throw e;
+    folderP = null; // deleted for good (maybe with its folder): make a new one
+  }
+  const f = await create(SYNC, text);
   syncId = f.id;
   return f;
 }

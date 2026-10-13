@@ -391,8 +391,9 @@ function copySelection(e: ClipboardEvent) {
 const deleteSelected = () => edit(() => { objects = objects.filter(o => !selected.has(o.id)); selected.clear(); });
 
 document.addEventListener('copy', copySelection);
-document.addEventListener('cut', e => { if (copySelection(e)) deleteSelected(); });
+document.addEventListener('cut', e => { if (!driveDlg.open && copySelection(e)) deleteSelected(); });
 document.addEventListener('paste', e => {
+  if (driveDlg.open) return; // the board is behind the Drive dialog
   const dt = e.clipboardData;
   if (!dt) return;
   const file = [...dt.items].find(i => i.kind === 'file' && i.type.startsWith('image/'))?.getAsFile();
