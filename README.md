@@ -32,3 +32,11 @@ npm run dist:electron         # package the desktop app into release/
 npm run deploy                # publish the web version to Netlify
 npm test
 ```
+
+## Acknowledgments
+
+- Built together with [Claude](https://claude.ai) (Anthropic's Claude Opus 5.5 in [Claude Code](https://claude.com/claude-code)), which wrote most of the code from my requirements.
+- [TypeScript](https://www.typescriptlang.org/), [Vite](https://vite.dev/) and [Node.js](https://nodejs.org/) for the app and its small backend.
+- [Electron](https://www.electronjs.org/) and [electron-builder](https://www.electron.build/) for the desktop app.
+- [Netlify](https://www.netlify.com/) for hosting the web version.
+- Ideas borrowed from [tldraw](https://github.com/tldraw/tldraw) (the grey-out-then-delete eraser) and Microsoft OneNote (pen presets).
