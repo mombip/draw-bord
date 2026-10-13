@@ -3,6 +3,5 @@ dist/
 dist-node/
 release/
 data/
-.venv/
 .playwright-mcp/
 .netlify/
