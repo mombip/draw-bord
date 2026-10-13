@@ -66,7 +66,17 @@ test('svg output is safe and viewer-friendly', () => {
 test('own svg paths parse back to the exact points', () => {
   const pts: [number, number][] = [[0, 0], [10.5, -3.25], [20, 7], [31, 2]];
   const d = /<path d="([^"]+)"/.exec(toSvg([{ ...line, points: pts }]))![1];
-  assert.deepEqual(parseOwnPath(d), pts);
-  assert.deepEqual(parseOwnPath('M1 2L3 4'), [[1, 2], [3, 4]]);
+  assert.deepEqual(parseOwnPath(d), { points: pts, straight: false });
+  assert.deepEqual(parseOwnPath('M1 2L3 4'), { points: [[1, 2], [3, 4]], straight: false });
   assert.equal(parseOwnPath('m 1,2 c 3,4 5,6 7,8'), null); // e.g. rewritten by Inkscape
+});
+
+test('grid-snapped (straight) strokes: polyline svg, exact round trip, validated flag', () => {
+  const pts: [number, number][] = [[0, 0], [40, 0], [40, 40], [-40, 40]];
+  const sq: Stroke = { ...line, points: pts, straight: true };
+  const d = /<path d="([^"]+)"/.exec(toSvg([sq]))![1];
+  assert.equal(d, 'M0 0L40 0L40 40L-40 40');
+  assert.deepEqual(parseOwnPath(d), { points: pts, straight: true });
+  assert.ok(isObj(sq));
+  assert.ok(!isObj({ ...sq, straight: 'yes' }));
 });

@@ -77,7 +77,7 @@ export function svgToObjects(text: string): { objects: Obj[]; skipped: number } 
       // ponytail: filled shapes come back as their outline only; real fills need a new object type
       const color = stroke ?? fill!, width = stroke ? parseFloat(s.strokeWidth) * k : 1;
       const own = tag === 'path' && isIdentity(m) ? parseOwnPath(el.getAttribute('d') ?? '') : null;
-      if (own) { objects.push({ id: uid(), type: 'stroke', points: own, color, width }); continue; }
+      if (own) { objects.push({ id: uid(), type: 'stroke', points: own.points, color, width, ...(own.straight && { straight: true }) }); continue; }
 
       // anything else: sample the outline; a jump means a new subpath -> new stroke
       const len = geo.getTotalLength(), step = Math.max(len / 5000, 2 / k);

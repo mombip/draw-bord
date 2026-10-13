@@ -1,5 +1,5 @@
 export type Pt = [number, number];
-export interface Stroke { id: string; type: 'stroke'; points: Pt[]; color: string; width: number }
+export interface Stroke { id: string; type: 'stroke'; points: Pt[]; color: string; width: number; straight?: boolean }
 export interface Img { id: string; type: 'image'; x: number; y: number; w: number; h: number; src: string }
 export type Obj = Stroke | Img;
 export interface Box { x: number; y: number; w: number; h: number }
@@ -82,6 +82,7 @@ export function isObj(o: any): o is Obj {
   if (!o || typeof o.id !== 'string') return false;
   if (o.type === 'stroke')
     return typeof o.color === 'string' && num(o.width) && Array.isArray(o.points) && o.points.length > 0
+      && (o.straight === undefined || typeof o.straight === 'boolean')
       && o.points.every((p: any) => Array.isArray(p) && p.length === 2 && num(p[0]) && num(p[1]));
   if (o.type === 'image')
     return [o.x, o.y, o.w, o.h].every(num) && typeof o.src === 'string' && o.src.startsWith('data:image/');
@@ -100,22 +101,29 @@ function paint(color: string, attr: 'stroke' | 'fill') {
   return m ? `${attr}="#${m[1]}" ${attr}-opacity="${Math.round(parseInt(m[2], 16) / 0.255) / 1000}"` : `${attr}="${esc(color)}"`;
 }
 
-/** Path through the points: quadratic curves via segment midpoints, same as the canvas renderer. */
-function strokeD(p: Pt[]): string {
+/** Path through the points, same as the canvas renderer: polyline if straight, else quadratic curves via midpoints. */
+function strokeD(p: Pt[], straight?: boolean): string {
   let d = `M${p[0][0]} ${p[0][1]}`;
+  if (straight) return d + p.slice(1).map(q => `L${q[0]} ${q[1]}`).join('');
   for (let i = 1; i < p.length - 1; i++)
     d += `Q${p[i][0]} ${p[i][1]} ${r2((p[i][0] + p[i + 1][0]) / 2)} ${r2((p[i][1] + p[i + 1][1]) / 2)}`;
   return d + `L${p[p.length - 1][0]} ${p[p.length - 1][1]}`;
 }
 
 /** Inverse of strokeD: exact points back (the Q control points are the samples), or null if it's someone else's path. */
-export function parseOwnPath(d: string): Pt[] | null {
-  const n = '(-?\\d+(?:\\.\\d+)?)';
-  if (!new RegExp(`^M${n} ${n}(Q${n} ${n} ${n} ${n})*L${n} ${n}$`).test(d)) return null;
-  const v = d.match(/-?\d+(?:\.\d+)?/g)!.map(Number), pts: Pt[] = [[v[0], v[1]]];
+export function parseOwnPath(d: string): { points: Pt[]; straight: boolean } | null {
+  const n = '-?\\d+(?:\\.\\d+)?', pt = `${n} ${n}`;
+  const v = d.match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? [];
+  if (new RegExp(`^M${pt}(L${pt}){2,}$`).test(d)) { // polyline (grid-snapped stroke)
+    const pts: Pt[] = [];
+    for (let i = 0; i < v.length; i += 2) pts.push([v[i], v[i + 1]]);
+    return { points: pts, straight: true };
+  }
+  if (!new RegExp(`^M${pt}(Q${pt} ${pt})*L${pt}$`).test(d)) return null;
+  const pts: Pt[] = [[v[0], v[1]]];
   for (let i = 2; i < v.length - 2; i += 4) pts.push([v[i], v[i + 1]]);
   pts.push([v[v.length - 2], v[v.length - 1]]);
-  return pts;
+  return { points: pts, straight: false };
 }
 
 /** Standalone SVG of the board. Reopening reads the drawing itself, so edits made in Inkscape etc. come back. */
@@ -127,7 +135,7 @@ export function toSvg(objs: Obj[]): string {
       return `<image xlink:href="${esc(o.src)}" x="${r2(o.x)}" y="${r2(o.y)}" width="${r2(o.w)}" height="${r2(o.h)}" preserveAspectRatio="none"/>`;
     const p = o.points.map(q => q.map(r2) as Pt);
     if (p.length === 1) return `<circle cx="${p[0][0]}" cy="${p[0][1]}" r="${r2(o.width / 2)}" ${paint(o.color, 'fill')}/>`;
-    return `<path d="${strokeD(p)}" fill="none" ${paint(o.color, 'stroke')} stroke-width="${r2(o.width)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+    return `<path d="${strokeD(p, o.straight)}" fill="none" ${paint(o.color, 'stroke')} stroke-width="${r2(o.width)}" stroke-linecap="round" stroke-linejoin="round"/>`;
   });
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="${x} ${y} ${w} ${h}" width="${w}" height="${h}">
 <rect id="drawboard-bg" x="${x}" y="${y}" width="${w}" height="${h}" fill="#fff"/>

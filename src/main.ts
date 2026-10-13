@@ -34,9 +34,13 @@ let tool: Tool = 'pen';
 const pen = { ...PRESETS[0] };
 let mouse: Pt = [innerWidth / 2, innerHeight / 2]; // world coords, paste target
 let spaceDown = false;
+let snapHint: Pt | null = null; // Shift + pen: where the pen snaps to
 let drag: Drag | null = null;
 let before = ''; // board snapshot at gesture start
 
+/** Spacing of the visible dot grid (coarser when zoomed out). */
+function gridStep() { let step = 40; while (step * cam.z < 16) step *= 4; return step; }
+const toGrid = ([x, y]: Pt): Pt => { const s = gridStep(); return [Math.round(x / s) * s, Math.round(y / s) * s]; };
 const toWorld = (sx: number, sy: number): Pt => [sx / cam.z + cam.x, sy / cam.z + cam.y];
 const selObjs = () => objects.filter(o => selected.has(o.id));
 const selBox = () => unionBox(selObjs().map(bbox));
@@ -114,7 +118,11 @@ function drawObj(o: Obj, ghost: boolean) {
     ctx.lineWidth = o.width;
     ctx.beginPath();
     if (p.length === 1) { ctx.arc(p[0][0], p[0][1], o.width / 2, 0, Math.PI * 2); ctx.fill(); }
-    else {
+    else if (o.straight) { // grid-snapped: straight segments, sharp corners
+      ctx.moveTo(p[0][0], p[0][1]);
+      for (let i = 1; i < p.length; i++) ctx.lineTo(p[i][0], p[i][1]);
+      ctx.stroke();
+    } else {
       // quadratic curves through segment midpoints = smooth line through the samples
       ctx.moveTo(p[0][0], p[0][1]);
       for (let i = 1; i < p.length - 1; i++)
@@ -137,8 +145,7 @@ function draw() {
   ctx.lineCap = ctx.lineJoin = 'round';
 
   // dot grid, so panning the infinite canvas is visible
-  let step = 40;
-  while (step * z < 16) step *= 4;
+  const step = gridStep();
   const [vx0, vy0] = toWorld(0, 0), [vx1, vy1] = toWorld(innerWidth, innerHeight), d = 1.5 / z;
   ctx.fillStyle = '#d4d4d4';
   ctx.beginPath();
@@ -165,6 +172,12 @@ function draw() {
     ctx.fillStyle = '#4263eb14';
     ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
     ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+  }
+  if (snapHint) {
+    ctx.strokeStyle = '#4263eb';
+    ctx.beginPath();
+    ctx.arc(snapHint[0], snapHint[1], 4 / z, 0, Math.PI * 2);
+    ctx.stroke();
   }
   if (tool === 'eraser' || drag?.kind === 'erase') {
     ctx.strokeStyle = '#888';
@@ -222,7 +235,7 @@ canvas.addEventListener('pointerdown', e => {
       drag = { kind: 'move', start: p, orig: selObjs() };
     } else if (tool === 'pen') {
       selected.clear();
-      drag = { kind: 'draw', stroke: { id: uid(), type: 'stroke', points: [p], color: pen.color, width: pen.width } };
+      drag = { kind: 'draw', stroke: { id: uid(), type: 'stroke', points: [e.shiftKey ? toGrid(p) : p], color: pen.color, width: pen.width } };
     } else {
       const target = objects.findLast(o => hit(o, p, 4 / cam.z));
       if (target && e.shiftKey) {
@@ -247,6 +260,8 @@ function erase(a: Pt, b: Pt) {
 canvas.addEventListener('pointermove', e => {
   const p = mouse = toWorld(e.clientX, e.clientY);
   const d = drag;
+  const hint = tool === 'pen' && e.shiftKey && (!d || d.kind === 'draw') ? toGrid(p) : null;
+  if (hint || snapHint) { snapHint = hint; render(); }
   if (!d) {
     const part = selPart(p);
     canvas.style.cursor = part === 'body' ? 'move' : part === 0 || part === 2 ? 'nwse-resize'
@@ -262,8 +277,16 @@ canvas.addEventListener('pointermove', e => {
     case 'draw': {
       const pts = d.stroke.points;
       for (const ce of e.getCoalescedEvents?.() ?? [e]) {
-        const q = toWorld(ce.clientX, ce.clientY), last = pts[pts.length - 1];
-        if (Math.hypot(q[0] - last[0], q[1] - last[1]) * cam.z >= 1.5) pts.push(q);
+        const last = pts[pts.length - 1];
+        if (ce.shiftKey) { // snap to the grid: straight segments between grid points
+          const w = toWorld(ce.clientX, ce.clientY), q = toGrid(w);
+          // only take a grid point once the pointer is near it, so a shaky hand between rows doesn't zigzag
+          const near = Math.hypot(w[0] - q[0], w[1] - q[1]) < gridStep() * 0.35;
+          if (near && (q[0] !== last[0] || q[1] !== last[1])) { pts.push(q); d.stroke.straight = true; }
+        } else {
+          const q = toWorld(ce.clientX, ce.clientY);
+          if (Math.hypot(q[0] - last[0], q[1] - last[1]) * cam.z >= 1.5) pts.push(q);
+        }
       }
       break;
     }
@@ -297,7 +320,10 @@ function endDrag() {
   const d = drag;
   if (!d) return;
   drag = null;
-  if (d.kind === 'draw') objects.push({ ...d.stroke, points: smooth(d.stroke.points) });
+  if (d.kind === 'draw') {
+    const { straight, ...s } = d.stroke;
+    objects.push(straight && s.points.length > 2 ? { ...s, straight } : { ...s, points: straight ? s.points : smooth(s.points) });
+  }
   if (d.kind === 'erase' && eraseCand.size) {
     objects = objects.filter(o => !eraseCand.has(o.id));
     for (const id of eraseCand) selected.delete(id);
@@ -464,6 +490,7 @@ function setPen(p: { color: string; width: number }) { Object.assign(pen, p); se
 addEventListener('keydown', e => {
   if (e.target instanceof HTMLInputElement) return;
   const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
+  if (k === 'shift' && tool === 'pen' && !drag) snapHint = toGrid(mouse);
   if (k === ' ') { spaceDown = true; e.preventDefault(); }
   else if (mod && k === 'z') { e.preventDefault(); e.shiftKey ? travel(redoStack, undoStack) : travel(undoStack, redoStack); }
   else if (mod && k === 'y') { e.preventDefault(); travel(redoStack, undoStack); }
@@ -481,7 +508,10 @@ addEventListener('keydown', e => {
   else if (!mod && PRESETS[+k - 1]) setPen(PRESETS[+k - 1]);
   render();
 });
-addEventListener('keyup', e => { if (e.key === ' ') spaceDown = false; });
+addEventListener('keyup', e => {
+  if (e.key === ' ') spaceDown = false;
+  if (e.key === 'Shift' && snapHint) { snapHint = null; render(); }
+});
 
 const presetBox = $('presets');
 PRESETS.forEach((p, i) => {
