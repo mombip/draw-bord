@@ -26,6 +26,25 @@ as plain `.svg` files that open anywhere and can be edited in Inkscape and opene
 
 Runs in the browser and as a desktop app (Electron); the board is saved automatically.
 
+## Google Drive (web version)
+
+Click the Google Drive button in the toolbar to connect. The board then syncs to
+`draw_board_files/board.svg` in your Drive: it is pulled again when you come back to the tab, the
+newer copy wins, and Ctrl+Z brings back the one it replaced. Click the button again for your
+drawings in that folder: open one, or *Save board as…* a new one; Ctrl+S then saves back to it.
+The app can only see files it created (`drive.file`).
+
+Lightweight by design: there is no backend, the page gets short-lived tokens straight from Google.
+So each new tab needs one click on the Drive button, and when the hourly token runs out your next
+click on the board renews it (a popup flashes for a second; no password). Not in the desktop app yet.
+
+Setup, once: in the [Google Cloud console](https://console.cloud.google.com/) create a project, enable
+the **Google Drive API**, configure the **OAuth consent screen** (External; add yourself as a test
+user), then **Credentials → Create OAuth client ID** of type *Web application* with authorized
+JavaScript origins `https://draw-board-mp.netlify.app`, `http://localhost:5173`,
+`http://localhost:3000` and `http://localhost:4173`. Put the client ID in `.env` as
+`VITE_GOOGLE_CLIENT_ID` and rebuild.
+
 ## Run
 
 ```bash
